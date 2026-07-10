@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Absensi Sekolah</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['Plus Jakarta Sans', 'sans-serif'],
+          body: ['Inter', 'sans-serif'],
+          mono: ['IBM Plex Mono', 'monospace'],
+        },
+        colors: {
+          navy: { 900: '#0E1A2B', 800: '#132339', 700: '#1E3A5F', 600: '#28507F' },
+          amber: { 500: '#F5A623', 400: '#F7B84D' },
+          ink: '#1A2332',
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  body { background-color: #F5F7FA; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #C7CDD6; border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:translateY(0);} }
+  .fade-up { animation: fadeUp .35s ease both; }
+  @keyframes popIn { from { opacity:0; transform:scale(.92);} to { opacity:1; transform:scale(1);} }
+  .pop-in { animation: popIn .3s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes shimmer { 0%{background-position:100% 0;} 100%{background-position:-100% 0;} }
+  .skeleton { background:linear-gradient(90deg,#EDEFF3 25%,#E4E7EC 37%,#EDEFF3 63%); background-size:400% 100%; animation:shimmer 1.4s ease infinite; }
+
+  .ring-progress { transition: stroke-dashoffset .8s ease; }
+
+  [data-jenis="datang"] { color:#2266A8; background:#E7F1FB; }
+  [data-jenis="pulang"] { color:#5B4B8A; background:#EFEAF9; }
+
+  [data-status="hadir"] { color:#2F9E44; background:#EAF7ED; }
+  [data-status="sakit"] { color:#B4780F; background:#FDF1DC; }
+  [data-status="izin"]  { color:#2266A8; background:#E7F1FB; }
+  [data-status="alpa"]  { color:#C1121F; background:#FCEAEA; }
+
+  #camPreview, #camCanvas { transform: scaleX(-1); }
+
+  .status-pick { transition: all .15s ease; }
+  .status-pick.active-hadir { background:#EAF7ED; border-color:#2F9E44; color:#2F9E44; }
+  .status-pick.active-sakit { background:#FDF1DC; border-color:#B4780F; color:#B4780F; }
+  .status-pick.active-izin  { background:#E7F1FB; border-color:#2266A8; color:#2266A8; }
+  .status-pick.active-alpa  { background:#FCEAEA; border-color:#C1121F; color:#C1121F; }
+</style>
+</head>
+
+<body class="font-body text-ink">
+
+  <div class="flex min-h-screen">
+
+    <!-- ============ SIDEBAR (desktop) ============ -->
+    <aside class="hidden lg:flex flex-col w-64 bg-navy-900 text-white shrink-0">
+      <div class="flex items-center gap-3 px-6 py-6 border-b border-white/10">
+        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center font-display font-extrabold text-navy-900">A</div>
+        <div>
+          <p class="font-display font-bold text-sm leading-tight">Absensi Sekolah</p>
+          <p class="text-[11px] text-white/50 leading-tight">Kiosk & Panel TU</p>
+        </div>
+      </div>
+
+      <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
+        <button onclick="switchTab('absen')" data-nav="absen" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="12" cy="11" r="3"/><path d="M8 4V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1"/></svg>
+          Absen Kehadiran
+        </button>
+        <button onclick="switchTab('dashboard')" data-nav="dashboard" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          Dashboard TU
+        </button>
+      </nav>
+
+      <div class="px-6 py-5 border-t border-white/10 text-[11px] text-white/40">
+        Terhubung ke Google Sheets
+        <div class="flex items-center gap-1.5 mt-1">
+          <span id="sidebarDot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span id="sidebarStatus" class="text-white/60">Memuat...</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-20">
+        <div class="min-w-0">
+          <h1 id="pageTitle" class="font-display font-bold text-base sm:text-xl text-navy-900 truncate">Absen Kehadiran</h1>
+          <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5" id="pageSubtitle">Silakan masukkan PIN Anda</p>
+        </div>
+        <div class="flex bg-slate-100 rounded-full p-1 text-xs font-medium shrink-0">
+          <button onclick="switchTab('absen')" data-nav="absen" class="nav-btn-mobile px-3 py-1.5 rounded-full transition">Absen</button>
+          <button onclick="switchTab('dashboard')" data-nav="dashboard" class="nav-btn-mobile px-3 py-1.5 rounded-full transition">Dashboard</button>
+        </div>
+      </header>
+
+      <!-- ======================= PANEL: ABSEN (KIOSK) ======================= -->
+      <main id="panelAbsen" class="flex-1 flex items-center justify-center px-4 py-8">
+        <div class="w-full max-w-sm">
+
+          <div class="text-center mb-5">
+            <p id="liveClock" class="font-mono font-bold text-3xl text-navy-900 tracking-tight">--:--:--</p>
+            <p id="liveDate" class="text-xs text-slate-500 mt-1">—</p>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 fade-up">
+
+            <!-- Segmented Datang/Pulang -->
+            <div class="grid grid-cols-2 gap-2 mb-5 bg-slate-100 rounded-xl p-1">
+              <button id="btnJenisDatang" onclick="setJenis('Datang')" class="jenis-btn py-2.5 rounded-lg text-sm font-semibold transition">Absen Datang</button>
+              <button id="btnJenisPulang" onclick="setJenis('Pulang')" class="jenis-btn py-2.5 rounded-lg text-sm font-semibold transition">Absen Pulang</button>
+            </div>
+
+            <!-- STEP 1: PIN -->
+            <div id="stepPin">
+              <label class="block text-xs font-medium text-slate-500 mb-2 text-center">Masukkan PIN Anda</label>
+              <input id="pinInput" type="tel" inputmode="numeric" maxlength="4" autocomplete="off"
+                class="w-full text-center font-mono text-3xl font-bold tracking-[0.5em] pl-[0.5em] py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/20 transition" />
+              <div id="pinStatus" class="min-h-[20px] text-center text-xs mt-2"></div>
+            </div>
+
+            <!-- STEP 2: KONFIRMASI IDENTITAS -->
+            <div id="stepConfirm" class="hidden pop-in">
+              <div class="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                <div id="confirmAvatar" class="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0"></div>
+                <div class="min-w-0">
+                  <p id="confirmNama" class="font-semibold text-navy-900 truncate"></p>
+                  <p id="confirmJabatan" class="text-xs text-slate-500 truncate"></p>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="resetKiosk()" class="py-2.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition">Bukan Saya</button>
+                <button onclick="showStep('stepStatus')" class="py-2.5 rounded-lg text-sm font-semibold bg-navy-700 text-white hover:bg-navy-600 transition">Lanjut →</button>
+              </div>
+            </div>
+
+            <!-- STEP 3: STATUS KEHADIRAN -->
+            <div id="stepStatus" class="hidden pop-in">
+              <label class="block text-xs font-medium text-slate-500 mb-2 text-center">Pilih status kehadiran</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="pilihStatus('Hadir')" class="status-pick border-2 border-slate-200 rounded-xl py-3 text-sm font-semibold text-slate-600">🟢 Hadir</button>
+                <button onclick="pilihStatus('Sakit')" class="status-pick border-2 border-slate-200 rounded-xl py-3 text-sm font-semibold text-slate-600">🟠 Sakit</button>
+                <button onclick="pilihStatus('Izin')" class="status-pick border-2 border-slate-200 rounded-xl py-3 text-sm font-semibold text-slate-600">🔵 Izin</button>
+                <button onclick="pilihStatus('Alpa')" class="status-pick border-2 border-slate-200 rounded-xl py-3 text-sm font-semibold text-slate-600">🔴 Alpa</button>
+              </div>
+              <button onclick="showStep('stepConfirm')" class="w-full mt-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-600 transition">← Kembali</button>
+            </div>
+
+            <!-- STEP 4: KAMERA (hanya jika status = Hadir) -->
+            <div id="stepCamera" class="hidden pop-in">
+              <p class="text-xs text-center text-slate-500 mb-3">Ambil foto selfie <strong>di depan kantor utama</strong></p>
+              <div class="relative rounded-xl overflow-hidden bg-navy-900 aspect-[3/4]">
+                <video id="camPreview" class="w-full h-full object-cover" autoplay playsinline muted></video>
+                <canvas id="camCanvas" class="hidden w-full h-full object-cover"></canvas>
+              </div>
+              <div id="camError" class="hidden text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3"></div>
+              <div class="grid grid-cols-2 gap-2 mt-4">
+                <button onclick="resetKiosk()" class="py-2.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition">Batal</button>
+                <button id="btnJepret" onclick="jepretFoto()" class="py-2.5 rounded-lg text-sm font-semibold bg-amber-500 text-navy-900 hover:bg-amber-400 transition flex items-center justify-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Jepret
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP 5: DETAIL & KIRIM -->
+            <div id="stepDetail" class="hidden pop-in">
+              <div id="fotoThumbWrap" class="hidden relative rounded-xl overflow-hidden bg-navy-900 aspect-[3/4] mb-4">
+                <img id="previewImg" class="w-full h-full object-cover" style="transform:scaleX(-1)" />
+                <button onclick="ambilUlang()" class="absolute bottom-2 right-2 text-[11px] font-medium bg-white/90 text-navy-900 px-2.5 py-1 rounded-full">Ambil Ulang</button>
+              </div>
+
+              <div id="fieldMapel" class="hidden mb-3">
+                <label class="block text-xs font-medium text-slate-500 mb-1">Mapel yang diajar hari ini</label>
+                <input id="inputMapel" type="text" placeholder="Contoh: Matematika, IPA"
+                  class="w-full text-sm px-3 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition" />
+              </div>
+              <div id="fieldJamJam" class="hidden mb-3">
+                <label class="block text-xs font-medium text-slate-500 mb-1">Jumlah jam mengajar</label>
+                <input id="inputJmlJam" type="number" min="0" max="12" placeholder="Contoh: 4"
+                  class="w-full text-sm px-3 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition" />
+              </div>
+              <div class="mb-1">
+                <label class="block text-xs font-medium text-slate-500 mb-1">Catatan <span class="text-slate-400 font-normal">(opsional)</span></label>
+                <textarea id="inputKeterangan" rows="2" placeholder="Tulis catatan bila perlu…"
+                  class="w-full text-sm px-3 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition resize-none"></textarea>
+              </div>
+
+              <div id="submitError" class="hidden text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-2"></div>
+
+              <div class="grid grid-cols-2 gap-2 mt-4">
+                <button onclick="showStep('stepStatus')" class="py-2.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition">← Kembali</button>
+                <button id="btnKirim" onclick="kirimAbsen()" class="py-2.5 rounded-lg text-sm font-semibold bg-navy-700 text-white hover:bg-navy-600 transition">Kirim Absen</button>
+              </div>
+            </div>
+
+            <!-- STEP 6: SUKSES -->
+            <div id="stepSuccess" class="hidden pop-in text-center py-4">
+              <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              </div>
+              <p class="font-display font-bold text-lg text-navy-900" id="successNama"></p>
+              <p class="text-sm text-slate-500 mt-1" id="successDetail"></p>
+              <p class="text-[11px] text-slate-400 mt-4">Kembali ke layar awal dalam <span id="countdownText">4</span> detik…</p>
+            </div>
+
+          </div>
+        </div>
+      </main>
+
+      <!-- ======================= PANEL: DASHBOARD ======================= -->
+      <main id="panelDashboard" class="hidden flex-1 px-4 sm:px-8 py-6 space-y-6">
+
+        <section id="statCards" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></section>
+
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-between px-5 py-4 border-b border-slate-100">
+            <div>
+              <h2 class="font-display font-semibold text-navy-900">Log Kehadiran</h2>
+              <p class="text-xs text-slate-500" id="tableCountText">—</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="dateFilter" type="date" class="text-sm rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition" />
+              <select id="jenisFilter" class="text-sm rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition">
+                <option value="">Semua jenis</option>
+                <option value="Datang">Datang</option>
+                <option value="Pulang">Pulang</option>
+              </select>
+              <select id="statusFilterSel" class="text-sm rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition">
+                <option value="">Semua status</option>
+                <option value="Hadir">Hadir</option>
+                <option value="Sakit">Sakit</option>
+                <option value="Izin">Izin</option>
+                <option value="Alpa">Alpa</option>
+              </select>
+              <div class="relative">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input id="searchInput" type="text" placeholder="Cari nama guru…"
+                  class="w-full sm:w-48 pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition" />
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-slate-500 text-xs uppercase tracking-wide bg-slate-50/80">
+                  <th class="px-5 py-3 font-medium">Foto</th>
+                  <th class="px-5 py-3 font-medium">Nama</th>
+                  <th class="px-5 py-3 font-medium">Jenis</th>
+                  <th class="px-5 py-3 font-medium">Status</th>
+                  <th class="px-5 py-3 font-medium">Tanggal</th>
+                  <th class="px-5 py-3 font-medium">Jam</th>
+                  <th class="px-5 py-3 font-medium">Ket.</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+
+          <div id="emptyState" class="hidden flex-col items-center justify-center gap-2 py-14 text-center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <p class="text-sm font-medium text-slate-500 mt-2">Tidak ada data yang cocok</p>
+          </div>
+        </section>
+      </main>
+
+    </div>
+  </div>
+
+  <div id="lightbox" class="hidden fixed inset-0 bg-black/80 z-50 items-center justify-center p-6" onclick="closeLightbox()">
+    <img id="lightboxImg" class="max-h-[85vh] rounded-xl" style="transform:scaleX(-1)" />
+  </div>
+
+<script>
+/* ==========================================================================
+ * KONFIGURASI — ganti dengan Web app URL hasil deploy Code.gs
+ * ========================================================================== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbyaKbiFW-tUIzgL5ZqHUmK_oHrT8fQnPmPEPIk3qkrwszExsp5V8nWn7GhX7JAY6O82/exec';
+
+/* Nama header PERSIS di sheet Log_Absen Anda (dipakai membaca hasil JSON) */
+const COL = {
+  timestamp: 'Waktu (Timestamp)',
+  nama: 'Nama Lengkap',
+  jabatan: 'Jabatan',
+  jenis: 'Jenis (Datang/Pulang)',
+  foto: 'Foto URL',
+  status: 'Status Kehadiran',
+  keterangan: 'Alasan/Ket',
+};
+
+/* ---------------------- Nav / Tabs ---------------------- */
+function switchTab(tab) {
+  const isAbsen = tab === 'absen';
+  document.getElementById('panelAbsen').classList.toggle('hidden', !isAbsen);
+  document.getElementById('panelDashboard').classList.toggle('hidden', isAbsen);
+  document.getElementById('pageTitle').textContent = isAbsen ? 'Absen Kehadiran' : 'Dashboard TU';
+  document.getElementById('pageSubtitle').textContent = isAbsen ? 'Silakan masukkan PIN Anda' : 'Rekap kehadiran guru & pegawai';
+
+  document.querySelectorAll('[data-nav]').forEach(el => {
+    const active = el.dataset.nav === tab;
+    el.classList.toggle('bg-white/10', active && el.classList.contains('nav-btn'));
+    el.classList.toggle('text-white', active && el.classList.contains('nav-btn'));
+    el.classList.toggle('text-white/70', !active && el.classList.contains('nav-btn'));
+    el.classList.toggle('bg-white', active && el.classList.contains('nav-btn-mobile'));
+    el.classList.toggle('text-navy-900', active && el.classList.contains('nav-btn-mobile'));
+    el.classList.toggle('shadow-sm', active && el.classList.contains('nav-btn-mobile'));
+    el.classList.toggle('text-slate-500', !active && el.classList.contains('nav-btn-mobile'));
+  });
+
+  if (tab === 'dashboard') loadDashboard();
+  if (tab === 'absen') resetKiosk();
+}
+
+/* ---------------------- Jam berjalan ---------------------- */
+function tickClock() {
+  const now = new Date();
+  document.getElementById('liveClock').textContent = now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  document.getElementById('liveDate').textContent = now.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+/* ---------------------- State Kiosk ---------------------- */
+let jenisAbsen = 'Datang';
+let statusAbsen = null;
+let pegawaiTerpilih = null;
+let fotoDataUrl = null;
+let cameraStream = null;
+let lookupTimer = null;
+
+function setJenis(j) {
+  jenisAbsen = j;
+  document.getElementById('btnJenisDatang').classList.toggle('bg-white', j === 'Datang');
+  document.getElementById('btnJenisDatang').classList.toggle('shadow-sm', j === 'Datang');
+  document.getElementById('btnJenisDatang').classList.toggle('text-navy-900', j === 'Datang');
+  document.getElementById('btnJenisDatang').classList.toggle('text-slate-500', j !== 'Datang');
+  document.getElementById('btnJenisPulang').classList.toggle('bg-white', j === 'Pulang');
+  document.getElementById('btnJenisPulang').classList.toggle('shadow-sm', j === 'Pulang');
+  document.getElementById('btnJenisPulang').classList.toggle('text-navy-900', j === 'Pulang');
+  document.getElementById('btnJenisPulang').classList.toggle('text-slate-500', j !== 'Pulang');
+}
+setJenis('Datang');
+
+function showStep(step) {
+  ['stepPin','stepConfirm','stepStatus','stepCamera','stepDetail','stepSuccess'].forEach(id => {
+    document.getElementById(id).classList.toggle('hidden', id !== step);
+  });
+}
+
+function resetKiosk() {
+  stopCamera();
+  pegawaiTerpilih = null;
+  fotoDataUrl = null;
+  statusAbsen = null;
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinStatus').textContent = '';
+  document.getElementById('inputMapel').value = '';
+  document.getElementById('inputJmlJam').value = '';
+  document.getElementById('inputKeterangan').value = '';
+  document.querySelectorAll('.status-pick').forEach(b => b.className = 'status-pick border-2 border-slate-200 rounded-xl py-3 text-sm font-semibold text-slate-600');
+  showStep('stepPin');
+  setTimeout(() => document.getElementById('pinInput')?.focus(), 50);
+}
+
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/);
+  return ((parts[0]?.[0]||'') + (parts[1]?.[0]||'')).toUpperCase();
+}
+function colorFromName(name) {
+  const palette = ['#1E3A5F','#28507F','#B4780F','#2266A8','#3F7D5C','#8B5A2B','#5B4B8A'];
+  let hash = 0;
+  for (const ch of String(name)) hash = (hash*31 + ch.charCodeAt(0)) % 997;
+  return palette[hash % palette.length];
+}
+function escapeHtml(str){ return String(str??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function isGuru() { return String(pegawaiTerpilih?.jabatan || '').toLowerCase().includes('guru'); }
+
+/* ---------------------- PIN lookup ---------------------- */
+document.getElementById('pinInput').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g,'').slice(0,4);
+  clearTimeout(lookupTimer);
+  const status = document.getElementById('pinStatus');
+  status.textContent = '';
+  status.className = 'min-h-[20px] text-center text-xs mt-2';
+
+  if (e.target.value.length === 4) {
+    status.textContent = 'Mencari…';
+    status.classList.add('text-slate-400');
+    lookupTimer = setTimeout(() => cariPegawaiByPin(e.target.value), 300);
+  }
+});
+
+async function cariPegawaiByPin(pin) {
+  const status = document.getElementById('pinStatus');
+  try {
+    if (!API_URL || API_URL.includes('GANTI_DENGAN')) throw new Error('API_URL belum diatur.');
+    const res = await fetch(`${API_URL}?action=cariPegawai&pin=${encodeURIComponent(pin)}`);
+    const json = await res.json();
+    if (json.status !== 'success') {
+      status.textContent = json.message || 'PIN tidak ditemukan';
+      status.className = 'min-h-[20px] text-center text-xs mt-2 text-red-500';
+      return;
+    }
+    pegawaiTerpilih = { nama: json.nama, jabatan: json.jabatan };
+    document.getElementById('confirmNama').textContent = json.nama;
+    document.getElementById('confirmJabatan').textContent = json.jabatan;
+    const avatar = document.getElementById('confirmAvatar');
+    avatar.textContent = initialsOf(json.nama);
+    avatar.style.background = colorFromName(json.nama);
+    showStep('stepConfirm');
+  } catch (err) {
+    status.textContent = err.message;
+    status.className = 'min-h-[20px] text-center text-xs mt-2 text-red-500';
+  }
+}
+
+/* ---------------------- Status kehadiran ---------------------- */
+function pilihStatus(s) {
+  statusAbsen = s;
+  document.querySelectorAll('.status-pick').forEach(b => {
+    const match = b.textContent.includes(s);
+    b.className = 'status-pick border-2 rounded-xl py-3 text-sm font-semibold ' +
+      (match ? `active-${s.toLowerCase()}` : 'border-slate-200 text-slate-600');
+  });
+
+  setTimeout(() => {
+    if (s === 'Hadir') {
+      bukaKamera();
+    } else {
+      fotoDataUrl = null;
+      goToDetail();
+    }
+  }, 200);
+}
+
+/* ---------------------- Kamera ---------------------- */
+async function bukaKamera() {
+  showStep('stepCamera');
+  const camError = document.getElementById('camError');
+  camError.classList.add('hidden');
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
+      audio: false,
+    });
+    document.getElementById('camPreview').srcObject = cameraStream;
+  } catch (err) {
+    camError.textContent = 'Tidak bisa mengakses kamera. Izinkan akses kamera pada browser lalu coba lagi.';
+    camError.classList.remove('hidden');
+  }
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+}
+
+function jepretFoto() {
+  const video = document.getElementById('camPreview');
+  const canvas = document.getElementById('camCanvas');
+  const w = 480, h = 640;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const srcRatio = vw / vh, dstRatio = w / h;
+  let sx, sy, sw, sh;
+  if (srcRatio > dstRatio) { sh = vh; sw = vh * dstRatio; sx = (vw - sw)/2; sy = 0; }
+  else { sw = vw; sh = vw / dstRatio; sx = 0; sy = (vh - sh)/2; }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
+
+  fotoDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+  document.getElementById('previewImg').src = fotoDataUrl;
+  stopCamera();
+  goToDetail();
+}
+
+function ambilUlang() {
+  fotoDataUrl = null;
+  bukaKamera();
+}
+
+/* ---------------------- Step Detail (mapel/jam/keterangan) ---------------------- */
+function goToDetail() {
+  const showFoto = statusAbsen === 'Hadir' && fotoDataUrl;
+  document.getElementById('fotoThumbWrap').classList.toggle('hidden', !showFoto);
+
+  const showMapel = statusAbsen === 'Hadir' && jenisAbsen === 'Datang' && isGuru();
+  document.getElementById('fieldMapel').classList.toggle('hidden', !showMapel);
+  document.getElementById('fieldJamJam').classList.toggle('hidden', !showMapel);
+
+  showStep('stepDetail');
+}
+
+/* ---------------------- Kirim absen ---------------------- */
+async function kirimAbsen() {
+  const btn = document.getElementById('btnKirim');
+  const errBox = document.getElementById('submitError');
+  errBox.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Mengirim…';
+
+  try {
+    if (!API_URL || API_URL.includes('GANTI_DENGAN')) throw new Error('API_URL belum diatur.');
+
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        pin: document.getElementById('pinInput').value,
+        jenis: jenisAbsen,
+        status: statusAbsen,
+        foto: fotoDataUrl || '',
+        keterangan: document.getElementById('inputKeterangan').value.trim(),
+        mapel: document.getElementById('inputMapel').value.trim(),
+        jmlJam: document.getElementById('inputJmlJam').value,
+      }),
+    });
+    const json = await res.json();
+    if (json.status !== 'success') throw new Error(json.message || 'Gagal mengirim absen.');
+
+    document.getElementById('successNama').textContent = json.nama;
+    document.getElementById('successDetail').textContent = `Absen ${json.jenis} · ${json.statusKehadiran} tercatat pukul ${json.jam}`;
+    showStep('stepSuccess');
+
+    let n = 4;
+    document.getElementById('countdownText').textContent = n;
+    const interval = setInterval(() => {
+      n--;
+      document.getElementById('countdownText').textContent = n;
+      if (n <= 0) { clearInterval(interval); resetKiosk(); }
+    }, 1000);
+
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Absen';
+  }
+}
+
+/* ==========================================================================
+ * DASHBOARD TU
+ * ========================================================================== */
+let logData = [];
+let pegawaiAktif = [];
+
+function renderSkeleton() {
+  document.getElementById('statCards').innerHTML = Array.from({length:4}).map(()=>`
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 h-[104px]">
+      <div class="skeleton h-3 w-20 rounded mb-3"></div>
+      <div class="skeleton h-6 w-14 rounded"></div>
+    </div>`).join('');
+  document.getElementById('tableBody').innerHTML = Array.from({length:5}).map(()=>`
+    <tr><td colspan="7" class="px-5 py-4"><div class="skeleton h-4 w-full rounded"></div></td></tr>`).join('');
+}
+
+async function loadDashboard() {
+  renderSkeleton();
+  document.getElementById('sidebarStatus').textContent = 'Memuat...';
+  try {
+    if (!API_URL || API_URL.includes('GANTI_DENGAN')) throw new Error('API_URL belum diatur.');
+
+    const [resLog, resPegawai] = await Promise.all([
+      fetch(`${API_URL}?action=log`, { cache:'no-store' }),
+      fetch(`${API_URL}?action=pegawai`, { cache:'no-store' }),
+    ]);
+    const jsonLog = await resLog.json();
+    const jsonPegawai = await resPegawai.json();
+    if (jsonLog.status !== 'success') throw new Error(jsonLog.message);
+    if (jsonPegawai.status !== 'success') throw new Error(jsonPegawai.message);
+
+    logData = jsonLog.data || [];
+    pegawaiAktif = jsonPegawai.data || [];
+
+    if (!document.getElementById('dateFilter').value) {
+      document.getElementById('dateFilter').value = new Date().toISOString().slice(0,10);
+    }
+
+    renderStatCards();
+    applyFilters();
+    document.getElementById('sidebarStatus').textContent = 'Tersambung';
+    document.getElementById('sidebarDot').className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
+
+  } catch (err) {
+    document.getElementById('statCards').innerHTML = `
+      <div class="col-span-2 lg:col-span-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl p-5 text-sm">
+        <p class="font-semibold mb-1">Gagal memuat data</p>
+        <p class="text-red-600/80">${escapeHtml(err.message)}</p>
+      </div>`;
+    document.getElementById('tableBody').innerHTML = '';
+    document.getElementById('sidebarStatus').textContent = 'Terputus';
+    document.getElementById('sidebarDot').className = 'w-1.5 h-1.5 rounded-full bg-red-400';
+  }
+}
+
+function renderStatCards() {
+  const todayStr = new Date().toISOString().slice(0,10);
+  const today = row => String(row[COL.timestamp] || '').slice(0,10) === todayStr;
+
+  const hadirHariIni = new Set(logData.filter(r => today(r) && r[COL.status] === 'Hadir' && r[COL.jenis] === 'Datang').map(r => r[COL.nama]));
+  const pulangHariIni = new Set(logData.filter(r => today(r) && r[COL.jenis] === 'Pulang').map(r => r[COL.nama]));
+  const tidakHadirHariIni = new Set(logData.filter(r => today(r) && ['Sakit','Izin','Alpa'].includes(r[COL.status])).map(r => r[COL.nama]));
+  const totalPegawai = pegawaiAktif.length;
+  const rate = totalPegawai ? Math.round((hadirHariIni.size / totalPegawai) * 100) : 0;
+
+  const circumference = 2 * Math.PI * 26;
+  const offset = circumference - (rate/100) * circumference;
+
+  const cards = [
+    { label:'Total Pegawai Aktif', value: totalPegawai, sub:'Terdaftar di Data_Pegawai',
+      icon:`<circle cx="12" cy="8" r="3.5"/><path d="M5 21c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/>`, accent:'text-navy-700 bg-navy-700/10' },
+    { label:'Hadir Hari Ini', value:`${rate}%`, sub:`${hadirHariIni.size} dari ${totalPegawai} sudah absen hadir`, ring:true },
+    { label:'Sudah Absen Pulang', value: pulangHariIni.size, sub:'Hari ini',
+      icon:`<path d="M4 12h16M14 6l6 6-6 6"/>`, accent:'text-amber-500 bg-amber-500/10' },
+    { label:'Sakit / Izin / Alpa', value: tidakHadirHariIni.size, sub:'Hari ini',
+      icon:`<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.5 17a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>`, accent:'text-red-600 bg-red-600/10' },
+  ];
+
+  document.getElementById('statCards').innerHTML = cards.map((c,i) => `
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 fade-up" style="animation-delay:${i*60}ms">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-xs text-slate-500 font-medium">${c.label}</p>
+          <p class="font-display font-extrabold text-2xl text-navy-900 mt-1.5">${c.value}</p>
+          <p class="text-[11px] text-slate-400 mt-1">${c.sub}</p>
+        </div>
+        ${c.ring ? `
+          <svg width="60" height="60" viewBox="0 0 60 60" class="-rotate-90">
+            <circle cx="30" cy="30" r="26" fill="none" stroke="#EEF1F4" stroke-width="6"/>
+            <circle cx="30" cy="30" r="26" fill="none" stroke="#F5A623" stroke-width="6" stroke-linecap="round"
+              stroke-dasharray="${circumference}" stroke-dashoffset="${circumference}" class="ring-progress" data-final="${offset}"/>
+          </svg>` : `
+          <div class="w-10 h-10 rounded-xl ${c.accent} flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">${c.icon}</svg>
+          </div>`}
+      </div>
+    </div>`).join('');
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.ring-progress').forEach(el => el.style.strokeDashoffset = el.dataset.final);
+  });
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tableBody');
+  const emptyState = document.getElementById('emptyState');
+  document.getElementById('tableCountText').textContent = `${data.length} baris ditampilkan`;
+
+  if (!data.length) {
+    tbody.innerHTML = '';
+    emptyState.classList.remove('hidden'); emptyState.classList.add('flex');
+    return;
+  }
+  emptyState.classList.add('hidden'); emptyState.classList.remove('flex');
+
+  tbody.innerHTML = data.map((row,i) => {
+    const nama = row[COL.nama] || '—';
+    const jabatan = row[COL.jabatan] || '';
+    const mapel = row['Mapel'];
+    const jenis = row[COL.jenis] || '—';
+    const statusVal = row[COL.status] || '—';
+    const foto = row[COL.foto];
+    const ket = row[COL.keterangan] || '';
+    const [tgl, jam] = String(row[COL.timestamp] || '').split(' ');
+    const color = colorFromName(nama);
+
+    return `
+      <tr class="hover:bg-slate-50/70 transition fade-up" style="animation-delay:${Math.min(i*25,300)}ms">
+        <td class="px-5 py-2.5">
+          ${foto
+            ? `<img src="${foto}" onclick="openLightbox('${foto}')" class="w-9 h-9 rounded-lg object-cover cursor-pointer border border-slate-200" style="transform:scaleX(-1)" />`
+            : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-semibold text-white" style="background:${color}">${initialsOf(nama)}</div>`}
+        </td>
+        <td class="px-5 py-2.5">
+          <p class="font-medium text-navy-900">${escapeHtml(nama)}</p>
+          <p class="text-[11px] text-slate-400">${escapeHtml(jabatan)}${mapel ? ' · ' + escapeHtml(mapel) : ''}</p>
+        </td>
+        <td class="px-5 py-2.5"><span data-jenis="${jenis.toLowerCase()}" class="inline-flex px-2.5 py-1 rounded-full text-xs font-medium">${escapeHtml(jenis)}</span></td>
+        <td class="px-5 py-2.5"><span data-status="${statusVal.toLowerCase()}" class="inline-flex px-2.5 py-1 rounded-full text-xs font-medium">${escapeHtml(statusVal)}</span></td>
+        <td class="px-5 py-2.5 font-mono text-xs text-slate-600">${escapeHtml(tgl||'—')}</td>
+        <td class="px-5 py-2.5 font-mono text-xs text-slate-600">${escapeHtml(jam||'—')}</td>
+        <td class="px-5 py-2.5 text-xs text-slate-500 max-w-[160px] truncate" title="${escapeHtml(ket)}">${escapeHtml(ket) || '—'}</td>
+      </tr>`;
+  }).join('');
+}
+
+function applyFilters() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const jenisVal = document.getElementById('jenisFilter').value;
+  const statusVal = document.getElementById('statusFilterSel').value;
+  const dateVal = document.getElementById('dateFilter').value;
+
+  const filtered = logData.filter(row => {
+    const nama = String(row[COL.nama] || '').toLowerCase();
+    const tgl = String(row[COL.timestamp] || '').slice(0,10);
+    return (!q || nama.includes(q))
+      && (!jenisVal || row[COL.jenis] === jenisVal)
+      && (!statusVal || row[COL.status] === statusVal)
+      && (!dateVal || tgl === dateVal);
+  });
+  renderTable(filtered);
+}
+
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('jenisFilter').addEventListener('change', applyFilters);
+document.getElementById('statusFilterSel').addEventListener('change', applyFilters);
+document.getElementById('dateFilter').addEventListener('change', applyFilters);
+
+function openLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.remove('hidden');
+  document.getElementById('lightbox').classList.add('flex');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.add('hidden');
+  document.getElementById('lightbox').classList.remove('flex');
+}
+
+/* ---------------------- Init ---------------------- */
+switchTab('absen');
+</script>
+</body>
+</html>
